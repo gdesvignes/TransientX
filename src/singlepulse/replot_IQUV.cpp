@@ -52,8 +52,6 @@ int main(int argc, char *argv[])
 			("td", value<int>()->default_value(1), "Time downsample")
 			("fd", value<int>()->default_value(1), "Frequency downsample")
 			("nw", value<int>()->default_value(20), "Chop data by nw*width")
-	  ("rmlim", value<double>()->default_value(200000.), "Limit for the RM Faraday synthesis search (+/- in rad/m/m)")
-	  ("rmstep", value<double>()->default_value(5.), "Steps in rad/m/m in the Faraday synthesis search")
 			("snrloss", value<float>()->default_value(1e-1), "S/N loss")
 			("dm", value<double>(), "Update dm")
 			("coherent", "Apply coherent dedispersion")
@@ -200,9 +198,6 @@ int main(int argc, char *argv[])
 	int td = vm["td"].as<int>();
 	int fd = vm["fd"].as<int>();
 
-	double rmlim = vm["rmlim"].as<double>();
-	double rmstep = vm["rmstep"].as<double>();
-
 	/** rfi */
 	std::vector<std::pair<double, double>> zaplist;
 	if (vm.count("zap"))
@@ -217,7 +212,7 @@ int main(int argc, char *argv[])
 
 	long int nchans = reader->nchans;
 	double tsamp = reader->tsamp * td;
-	int nifs = reader->sumif ? 1 : reader->nifs;
+	int nifs = reader->nifs;
 	long int nsblk = reader->nsblk / td * td;
 
 	long double start_mjd = reader->start_mjd.to_day();
@@ -336,7 +331,7 @@ int main(int argc, char *argv[])
 	
 	BOOST_LOG_TRIVIAL(info)<<"start processing... ";
 
-	DataBuffer<float> databuffer(nsblk, nifs*nchans);
+	DataBuffer<float> databuffer(nsblk, nchans, nifs);
 	Downsample downsample(td, 1);
 	downsample.prepare(databuffer);
 
@@ -468,9 +463,8 @@ int main(int argc, char *argv[])
 								BOOST_LOG_TRIVIAL(debug)<<"dedisperse at DM="<<cands[k].dm<<"...";
 								cands[k].dedisperse(vm.count("coherent"));
 
-								BOOST_LOG_TRIVIAL(info)<<"running Faraday search...";
-								cands[k].runFaraday(rmlim, rmstep);
-								
+								cands[k].runFaraday();
+
 								BOOST_LOG_TRIVIAL(debug)<<"save to png...";
 								cands[k].save2png(rootname, snr_threhold);
 							}

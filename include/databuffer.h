@@ -30,17 +30,21 @@ public:
 	DataBuffer(const DataBuffer<T> &databuffer);
 	DataBuffer<T> & operator=(const DataBuffer<T> &databuffer);
 	DataBuffer(long int ns, int nc);
+	DataBuffer(long int ns, int nc, int np);
 	virtual ~DataBuffer();
 	virtual void prepare(DataBuffer<T> &databuffer);
 	virtual DataBuffer<T> * run(DataBuffer<T> &databuffer);
 	virtual DataBuffer<T> * filter(DataBuffer<T> &databuffer);
 	virtual DataBuffer<T> * get(){return this;}
+	virtual DataBuffer<T> * get_pol(DataBuffer<T> &databuffer, int ipol);
+	virtual DataBuffer<T> * four2one(DataBuffer<T> &databufferI, DataBuffer<T> &databufferQ, DataBuffer<T> &databufferU, DataBuffer<T> &databufferV);
 	void open();
 	void close();
 	void dump2txt(const string fname);
 	void dump2bin(const string fname);
 	void dump(const string fname);
 	void resize(long int ns, int nc);
+	void resize(long int ns, int nc, int np);
 	void get_mean_rms(vector<T> &mean, vector<T> &var);
 public:
 	bool equalized;
@@ -50,6 +54,7 @@ public:
 	long int nsamples;
 	double tsamp;
 	int nchans;
+	int npol;
 	vector<double> frequencies;
 #ifdef __AVX2__
 	vector<T, boost::alignment::aligned_allocator<T, 32>> buffer;
@@ -57,5 +62,4 @@ public:
 	vector<T> buffer;
 #endif
 };
-
 #endif /* DATABUFFER_H_ */

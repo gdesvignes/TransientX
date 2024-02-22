@@ -26,6 +26,7 @@ DataBuffer<T>::DataBuffer()
 	nsamples = 0;
 	tsamp = 0.;
 	nchans = 0;
+	npol = 0;
 }
 
 template <typename T>
@@ -38,6 +39,7 @@ DataBuffer<T>::DataBuffer(const DataBuffer<T> &databuffer)
 	nsamples = databuffer.nsamples;
 	tsamp = databuffer.tsamp;
 	nchans = databuffer.nchans;
+	npol = databuffer.npol;
 	frequencies = databuffer.frequencies;
 	buffer = databuffer.buffer;
 }
@@ -52,6 +54,7 @@ DataBuffer<T> & DataBuffer<T>::operator=(const DataBuffer<T> &databuffer)
 	nsamples = databuffer.nsamples;
 	tsamp = databuffer.tsamp;
 	nchans = databuffer.nchans;
+	npol = databuffer.npol;
 	frequencies = databuffer.frequencies;
 	buffer = databuffer.buffer;
 
@@ -62,12 +65,24 @@ template <typename T>
 DataBuffer<T>::DataBuffer(long int ns, int nc)
 {
 	counter = 0;
-	resize(ns, nc);
+	resize(ns, nc, 1);
 	tsamp = 0.;
 
 	equalized = false;
 	isbusy = false;
 	closable = false;
+}
+
+template <typename T>
+DataBuffer<T>::DataBuffer(long int ns, int nc, int np)
+{
+ 	counter = 0;
+        resize(ns, nc, np);
+        tsamp = 0.;
+
+        equalized = false;
+        isbusy = false;
+        closable = false;
 }
 
 template <typename T>
@@ -79,12 +94,64 @@ void DataBuffer<T>::prepare(DataBuffer<T> &databuffer)
 	equalized = databuffer.equalized;
 	nsamples = databuffer.nsamples;
 	nchans = databuffer.nchans;
-
-	resize(nsamples, nchans);
+	npol = databuffer.npol;
+	
+	resize(nsamples, nchans, npol);
 
 	tsamp = databuffer.tsamp;
 	frequencies = databuffer.frequencies;
 }
+
+template <typename T>
+DataBuffer<T> * DataBuffer<T>::get_pol(DataBuffer<T> &databuffer, int ipol)
+{
+        equalized = databuffer.equalized;
+        nsamples = databuffer.nsamples;
+	nchans = databuffer.nchans;
+        npol = 1;
+
+        resize(nsamples, nchans, npol);
+
+	tsamp = databuffer.tsamp;
+        frequencies = databuffer.frequencies;
+
+        for (long int i=0; i<nsamples; i++)
+        {
+	        for (long int j=0; j<nchans; j++)
+                {
+			buffer[i*nchans+j] = databuffer.buffer[i*databuffer.npol*databuffer.nchans+ipol*databuffer.nchans+j];
+                }
+
+        }
+	return this;
+}
+
+template <typename T>
+DataBuffer<T> * DataBuffer<T>::four2one(DataBuffer<T> &databufferI, DataBuffer<T> &databufferQ, DataBuffer<T> &databufferU, DataBuffer<T> &databufferV)
+{
+  //buffer = databuffer.buffer;
+  equalized = databufferI.equalized;
+  nsamples = databufferI.nsamples;
+  nchans = databufferI.nchans;
+  npol = 4;
+  counter = databufferI.counter;
+  equalized = databufferI.equalized;
+  isbusy = databufferI.isbusy;
+  resize(nsamples, nchans, npol);
+
+  tsamp = databufferI.tsamp;
+  frequencies = databufferI.frequencies;
+  
+	for (long int i=0; i<nsamples; i++)
+	  {
+	    copy(databufferI.buffer.begin() + i*nchans, databufferI.buffer.begin() + (i+1)*nchans+1, buffer.begin()+i*npol*nchans);
+	    copy(databufferQ.buffer.begin() + i*nchans, databufferQ.buffer.begin() + (i+1)*nchans+1, buffer.begin()+i*npol*nchans + 1*nchans);
+	    copy(databufferU.buffer.begin() + i*nchans, databufferU.buffer.begin() + (i+1)*nchans+1, buffer.begin()+i*npol*nchans + 2*nchans);
+	    copy(databufferV.buffer.begin() + i*nchans, databufferV.buffer.begin() + (i+1)*nchans+1, buffer.begin()+i*npol*nchans + 3*nchans);
+	  }
+  
+        return this;
+};
 
 template <typename T>
 DataBuffer<T> * DataBuffer<T>::run(DataBuffer<T> &databuffer)
@@ -113,7 +180,7 @@ template <typename T>
 void DataBuffer<T>::open()
 {
 	buffer.clear();
-	buffer.resize(nsamples*nchans, 0.);
+	buffer.resize(nsamples*nchans*npol, 0.);
 }
 
 template <typename T>
@@ -126,19 +193,23 @@ void DataBuffer<T>::close()
 template <typename T>
 void DataBuffer<T>::dump2txt(const string fname)
 {
+  string st = "-Pol";
 	ofstream outfile;
-	outfile.open(fname, ofstream::out);
+	for (int k=0; k<npol; k++)
+	  {
+	    outfile.open(fname+st+to_string(k), ofstream::out);
 
-	for (long int i=0; i<nsamples; i++)
-	{
+	    for (long int i=0; i<nsamples; i++)
+	      {
 		for (long int j=0; j<nchans; j++)
-		{
-			outfile<<buffer[i*nchans+j]<<" ";
-		}
+		  {
+		    outfile<<buffer[i*npol*nchans+k*nchans+j]<<" ";
+		  }
 		outfile<<endl;
-	}
+	      }
 
-	outfile.close();
+	    outfile.close();
+	  }
 }
 
 template <typename T>
@@ -162,14 +233,23 @@ void DataBuffer<T>::dump(const string fname)
 
 	outfile.close();
 }
+//template <typename T>
+//void DataBuffer<T>::resize(long int ns, int nc)
+//{
+//	nsamples = ns;
+//	nchans = nc;
+//	buffer.resize(nsamples*nchans*npol, 0.);
+//	frequencies.resize(nchans, 0.);
+//}
 
 template <typename T>
-void DataBuffer<T>::resize(long int ns, int nc)
+void DataBuffer<T>::resize(long int ns, int nc, int np)
 {
-	nsamples = ns;
-	nchans = nc;
-	buffer.resize(nsamples*nchans, 0.);
-	frequencies.resize(nchans, 0.);
+        nsamples = ns;
+        nchans = nc;
+	npol = np;
+        buffer.resize(nsamples*nchans*npol, 0.);
+        frequencies.resize(nchans, 0.);
 }
 
 template <typename T>
@@ -179,11 +259,14 @@ void DataBuffer<T>::get_mean_rms(vector<T> &mean, vector<T> &var)
 	var.resize(nchans, 0.);
 	for (long int i=0; i<nsamples; i++)
 	{
+	  for (int k=0; k<npol; k++)
+	    {
 		for (long int j=0; j<nchans; j++)
 		{
-			mean[j] += buffer[i*nchans+j];
-			var[j] += buffer[i*nchans+j]*buffer[i*nchans+j];
+			mean[j] += buffer[i*npol*nchans+k*nchans+j];
+			var[j] += buffer[i*npol*nchans+k*nchans+j]*buffer[i*npol*nchans+k*nchans+j];
 		}
+	    }
 	}
 
 	for (long int j=0; j<nchans; j++)

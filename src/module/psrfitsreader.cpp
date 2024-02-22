@@ -471,26 +471,30 @@ size_t PsrfitsReader::read_data(DataBuffer<float> &databuffer, size_t ndump, boo
 						}
 						else
 						{
-							if (apply_wts)
+						  for (size_t k=0; k<nifs; k++)
+						    {
+						      if (apply_wts)
 							{
 								if (apply_scloffs)
 								{
 									for (size_t j=0; j<nchans; j++)
 									{
-										float xx = it.weights[j] * ((((float *)(it.data))[i*nifs*nchans+0*nchans+j] - zero_off) * it.scales[0*nchans+j] + it.offsets[0*nchans+j]);
-										float yy = it.weights[j] * ((((float *)(it.data))[i*nifs*nchans+1*nchans+j] - zero_off) * it.scales[1*nchans+j] + it.offsets[1*nchans+j]);
+										float Stokes = it.weights[j] * ((((float *)(it.data))[i*nifs*nchans+k*nchans+j] - zero_off) * it.scales[k*nchans+j] + it.offsets[k*nchans+j]);
+										//float Q = it.weights[j] * ((((float *)(it.data))[i*nifs*nchans+1*nchans+j] - zero_off) * it.scales[1*nchans+j] + it.offsets[1*nchans+j]);
+										//float U = it.weights[j] * ((((float *)(it.data))[i*nifs*nchans+2*nchans+j] - zero_off) * it.scales[2*nchans+j] + it.offsets[2*nchans+j]);
+										//float V = it.weights[j] * ((((float *)(it.data))[i*nifs*nchans+3*nchans+j] - zero_off) * it.scales[3*nchans+j] + it.offsets[3*nchans+j]);
 										
-										databuffer.buffer[bcnt1*nchans+j] = xx;// + yy;
+										databuffer.buffer[bcnt1*nifs*nchans+k*nchans+j] = Stokes;// + yy;
 									}
 								}
 								else
 								{
 									for (size_t j=0; j<nchans; j++)
 									{
-										float xx = it.weights[j] * (((float *)(it.data))[i*nifs*nchans+0*nchans+j] - zero_off);
-										float yy = it.weights[j] * (((float *)(it.data))[i*nifs*nchans+1*nchans+j] - zero_off);
-
-										databuffer.buffer[bcnt1*nchans+j] = xx;// + yy;
+									  //float xx = it.weights[j] * (((float *)(it.data))[i*nifs*nchans+0*nchans+j] - zero_off);
+										//float yy = it.weights[j] * (((float *)(it.data))[i*nifs*nchans+1*nchans+j] - zero_off);
+										float Stokes = it.weights[j] * (((float *)(it.data))[i*nifs*nchans+k*nchans+j] - zero_off);
+										databuffer.buffer[bcnt1*nifs*nchans+k*nchans+j] = Stokes;// + yy;
 									}
 								}
 							}
@@ -500,23 +504,24 @@ size_t PsrfitsReader::read_data(DataBuffer<float> &databuffer, size_t ndump, boo
 								{
 									for (size_t j=0; j<nchans; j++)
 									{
-										float xx = (((float *)(it.data))[i*nifs*nchans+0*nchans+j] - zero_off) * it.scales[0*nchans+j] + it.offsets[0*nchans+j];
-										float yy = (((float *)(it.data))[i*nifs*nchans+1*nchans+j] - zero_off) * it.scales[1*nchans+j] + it.offsets[1*nchans+j];
-
-										databuffer.buffer[bcnt1*nchans+j] = xx;// + yy;
+									  //float xx = (((float *)(it.data))[i*nifs*nchans+0*nchans+j] - zero_off) * it.scales[0*nchans+j] + it.offsets[0*nchans+j];
+									  //float yy = (((float *)(it.data))[i*nifs*nchans+1*nchans+j] - zero_off) * it.scales[1*nchans+j] + it.offsets[1*nchans+j];
+									  float Stokes = (((float *)(it.data))[i*nifs*nchans+k*nchans+j] - zero_off) * it.scales[k*nchans+j] + it.offsets[k*nchans+j];
+									  databuffer.buffer[bcnt1*nifs*nchans+k*nchans+j] = Stokes;// + yy;
 									}
 								}
 								else
 								{
 									for (size_t j=0; j<nchans; j++)
 									{
-										float xx = ((float *)(it.data))[i*nifs*nchans+0*nchans+j] - zero_off;
-										float yy = ((float *)(it.data))[i*nifs*nchans+1*nchans+j] - zero_off;
-
-										databuffer.buffer[bcnt1*nchans+j] = xx;// + yy;
+									  //float xx = ((float *)(it.data))[i*nifs*nchans+0*nchans+j] - zero_off;
+									  //	float yy = ((float *)(it.data))[i*nifs*nchans+1*nchans+j] - zero_off;
+									  float Stokes = ((float *)(it.data))[i*nifs*nchans+k*nchans+j] - zero_off;
+									  databuffer.buffer[bcnt1*nifs*nchans+k*nchans+j] = Stokes;// + yy;
 									}
 								}
 							}
+						    }
 						}
 					}
 					else

@@ -1142,6 +1142,76 @@ void Candidate::peak_search(float snrloss)
 	mjd = mjd_start+(maxtid*tbin)/86400.;
 }
 
+void Candidate::runFaraday(double rmlim, double rmstep)
+{
+  int k;
+  const complex<float> ic(0.0, 1.0);
+  // Faraday synthesis
+  lambda2.resize(nchan);
+  L.resize(nchan);
+  for (long int j=0; j<nchan; j++)
+    lambda2[j] = powf(299792458. / (frequencies[j]*1e6), 2);
+
+  // Make range of RM trials
+  float dRM = rmstep;
+  float minRM = -rmlim;
+  nRMs = (int)2*rmlim/rmstep;
+  RM_trials.resize(nRMs);
+  Lavg.resize(nRMs);
+  cout << dRM << " " << minRM << endl;
+  for (int i=0; i<nRMs; i++)
+    RM_trials[i] = minRM + dRM*i;
+
+
+  float Q, U;
+  int nb;
+  float tmpQ, tmpU;
+  cout << data.size() << " " << maxtid << " " << width/tbin << endl;
+  for (int j=0; j<nchan; j++) {
+    /*
+    */
+    nb = 0;
+    tmpQ = 0.; tmpU = 0.0;
+
+    for (int i=0; i<maxtid-(int)(width/tbin); i++) {
+      tmpQ += data[1*nchan*nbin+j*nbin+i];
+      tmpU += data[2*nchan*nbin+j*nbin+i];
+      nb++;
+    }
+    for (int i=maxtid+(int)(width/tbin); i<nbin; i++) {
+      tmpQ += data[1*nchan*nbin+j*nbin+i];
+      tmpU += data[2*nchan*nbin+j*nbin+i];
+      nb++;
+    }
+    tmpQ /= nb;
+    tmpU /= nb;
+    
+    for (int i=maxtid-(int)(width/tbin); i<=maxtid+(int)(width/tbin); i++) {
+      Q = data[1*nchan*nbin+j*nbin+i] - tmpQ;
+      U = data[2*nchan*nbin+j*nbin+i] - tmpU;
+      L[j] += Q + ic*U;
+    }
+    //cout << j << " " << Q << " " << U << endl;
+  }
+
+  const complex<float> ic2(0.0, -2.0);
+
+#ifdef _OPENMP
+#pragma omp parallel for num_threads(num_threads)
+#endif
+  for (int i=0; i<nRMs; i++) {
+    complex<float> tmp =  0.0;
+    for (int j=0; j<nchan; j++)
+      tmp += (L[j] * exp(ic2 * lambda2[j] * RM_trials[i]));
+    Lavg[i] = fabs(tmp);
+  }
+
+  auto bestRMidx = distance(Lavg.begin(), max_element(begin(Lavg), end(Lavg)) );
+  
+  bestRM = RM_trials[bestRMidx];
+    
+}
+
 void Candidate::save2png(const std::string &rootname, float threS)
 {
 	std::string basename = pngname;
@@ -1165,6 +1235,10 @@ void Candidate::save2png(const std::string &rootname, float threS)
 	ss_width<<fixed<<setprecision(1)<<width*1000;
 	std::string s_width = ss_width.str();
 
+	std::stringstream ss_rm;
+        ss_rm<<fixed<<setprecision(1)<<bestRM;
+        std::string s_rm = ss_rm.str();
+	
 	std::stringstream ss_dm;
 	ss_dm<<fixed<<setprecision(1)<<dm_maxsnr;
 	std::string s_dm = ss_dm.str();
@@ -1189,7 +1263,8 @@ void Candidate::save2png(const std::string &rootname, float threS)
 
 	string src_name = obsinfo["Source_name"];
 
-	string figname = basename+"_replot.png";
+	//string figname = basename+"_replot.png";
+	string figname = basename+"_replot.ps";
 
 	long int nsamples = nbin;
 	long int nchans = nchan;
@@ -1197,10 +1272,9 @@ void Candidate::save2png(const std::string &rootname, float threS)
 	int wn = width/tbin;
 
 	std::vector<float> mxft(nchans*nsamples, 0.);
-	for (long int k=0; k<npol; k++)
+	int npol2sum = (npol==2 ? 2 : 1);
+	for (long int k=0; k<npol2sum; k++)
 	{
-		if (k<2)
-		{
 			for (long int j=0; j<nchan; j++)
 			{
 				for (long int i=0; i<nbin; i++)
@@ -1208,7 +1282,6 @@ void Candidate::save2png(const std::string &rootname, float threS)
 					mxft[j*nsamples+i] += data[k*nchan*nbin+j*nbin+i];
 				}
 			}
-		}
 	}
 
 	std::vector<float> vt, vf, vpf, vpfcum;
@@ -1412,17 +1485,17 @@ void Candidate::save2png(const std::string &rootname, float threS)
 	}
 
 	/** plot */
-	plt::Figure fig(8., 1.5);
+	plt::Figure fig(12., .8);
 
 	fig.set_background_color("black");
 	fig.set_default_color("white");
 
 	float adjustx = 0., adjusty = 0.02;
 	/* profile */
-	plt::Axes ax_pro(0.1+adjustx, 0.75+adjustx, 0.65+adjusty, 0.80+adjusty);
+	plt::Axes ax_pro(0.08+adjustx, 0.42+adjustx, 0.8+adjusty, 0.99);
 	ax_pro.plot(vt_down, vp_down);
-	ax_pro.annotate("S/N = "+s_snr, 0.70, 0.8);
-	ax_pro.annotate("w = "+s_width+" ms", 0.70, 0.65);
+	ax_pro.annotate("S/N = "+s_snr, 0.65, 0.8);
+	ax_pro.annotate("w = "+s_width+" ms", 0.65, 0.65);
 	ax_pro.axvline(vt[maxtid], 0., 1., {{"color", "red"}});
 	ax_pro.autoscale(true, "x", true);
 	ax_pro.set_ylabel("Flux");
@@ -1430,14 +1503,14 @@ void Candidate::save2png(const std::string &rootname, float threS)
 	fig.push(ax_pro);
 
 	/* f-t */
-	plt::Axes ax_ft(0.1+adjustx, 0.75+adjustx, 0.35+adjusty, 0.65+adjusty);
+	plt::Axes ax_ft(0.08+adjustx, 0.42+adjustx, 0.45+adjusty, 0.8+adjusty);
 	ax_ft.pcolor(vt_down, vf_down, mxft_down, "viridis");
 	ax_ft.set_ylabel("Frequency (MHz)");
 	ax_ft.label(true, false, false, false);
 	fig.push(ax_ft);
 
 	/* power-f */
-	plt::Axes ax_powf(0.75+adjustx, 0.95+adjustx, 0.35+adjusty, 0.65+adjusty);
+	plt::Axes ax_powf(0.42+adjustx, 0.55+adjustx, 0.45+adjusty, 0.8+adjusty);
 	ax_powf.plot(vpfcum_down, vfnorm_down);
 	ax_powf.annotate("Integral Flux", 0.1, 1.2);
 	ax_powf.axhline(fl, 0., 1., {{"color", "red"}});
@@ -1453,7 +1526,7 @@ void Candidate::save2png(const std::string &rootname, float threS)
 		float ypos = vdm[maxdmid];
 		float dmpos = dm_maxsnr;
 
-		plt::Axes ax_dmt(0.1+adjustx, 0.75+adjustx, 0.05+adjusty, 0.35+adjusty);
+		plt::Axes ax_dmt(0.08+adjustx, 0.42+adjustx, 0.08+adjusty, 0.45+adjusty);
 		ax_dmt.pcolor(vt_down, vdm_down, mxdmt_down, "viridis");
 		ax_dmt.circle(xpos, ypos, 5.);
 		ax_dmt.set_xlabel("Time (s)");
@@ -1461,12 +1534,12 @@ void Candidate::save2png(const std::string &rootname, float threS)
 		fig.push(ax_dmt);
 
 		/* dm-S */
-		plt::Axes ax_dmS(0.75+adjustx, 0.95+adjustx, 0.05+adjusty, 0.35+adjusty);
+		plt::Axes ax_dmS(0.42+adjustx, 0.55+adjustx, 0.08+adjusty, 0.45+adjusty);
 		ax_dmS.plot(vSdm_down, vdm_down);
 		float vSdm_down_min = *std::min_element(vSdm_down.begin(), vSdm_down.end());
 		float vSdm_down_max = *std::max_element(vSdm_down.begin(), vSdm_down.end());
 		float vdm_down_min = *std::min_element(vdm_down.begin(), vdm_down.end());
-		ax_dmS.annotate("DM = "+s_dm+" cm\\u-3\\dpc", std::min(vSdm_down_min, threS)+0.75*(vSdm_down_max-std::min(vSdm_down_min, threS)), std::min(vdm_down_min, dmpos), {{"xycoords", "data"}, {"rotation", "270"}, {"refpos", "right"}});
+		ax_dmS.annotate("DM = "+s_dm+" cm\\u-3\\dpc", std::min(vSdm_down_min, threS)+0.95*(vSdm_down_max-std::min(vSdm_down_min, threS)), std::min(vdm_down_min, dmpos), {{"xycoords", "data"}, {"rotation", "270"}, {"refpos", "right"}});
 		ax_dmS.axhline(dmpos, 0., 1., {{"color", "red"}});
 		ax_dmS.axvline(threS, 0., 1., {{"color", "red"}});
 		ax_dmS.set_xlabel("S/N");
@@ -1475,33 +1548,47 @@ void Candidate::save2png(const std::string &rootname, float threS)
 		fig.push(ax_dmS);
 	}
 
+	/* Faraday plot*/
+	PlotX::Axes ax9(0.62+adjustx, 0.95+adjustx, 0.2+adjusty, 0.5+adjusty);
+	ax9.plot(RM_trials, Lavg);
+	ax9.axvline(bestRM, 0, 1, {{"color", "red"}});
+	ax9.set_ylabel("L");
+	ax9.autoscale(true, "x", true);
+	//ax9.set_fontsize_label(fontsize_label);
+	//ax9.set_fontsize_ticklabel(fontsize_ticklabel);
+	ax9.annotate("RM syn", 0.75, 0.88, {{"xycoords","axes fraction"}, {"fontsize", "0.9"}});
+	ax9.set_xlabel("RM (rad m\\u-2\\d)");
+	ax9.label(false, false, true, false);
+	fig.push(ax9);
+	
 	/* metadata */
-	plt::Axes ax_meta(0.1+adjustx, 0.95+adjustx, 0.81+adjusty, 0.99);
+	plt::Axes ax_meta(0.58+adjustx, 0.95+adjustx, 0.54+adjusty, 0.99);
 	ax_meta.label(false, false, false, false);
 	ax_meta.frame(false, false, false, false);
 	ax_meta.minorticks_off();
 	ax_meta.majorticks_off();
 	std::string fontsize = "1";
 	ax_meta.annotate("Telescope = " + obsinfo["Telescope"], 0.02, 0.88, {{"fontsize", fontsize}});
-	ax_meta.annotate("Beam = " + obsinfo["Beam"], 0.02, 0.74, {{"fontsize", fontsize}});
-	ax_meta.annotate("RA = " + obsinfo["RA"], 0.02, 0.60, {{"fontsize", fontsize}});
-	ax_meta.annotate("DEC = " + obsinfo["DEC"], 0.02, 0.46, {{"fontsize", fontsize}});
-	ax_meta.annotate("DM (pc/cc) = " + s_dm, 0.02, 0.32, {{"fontsize", fontsize}});
-	ax_meta.annotate("Width (ms) = " + s_width, 0.02, 0.18, {{"fontsize", fontsize}});
-	ax_meta.annotate("S/N = " + s_snr, 0.02, 0.04, {{"fontsize", fontsize}});
-	
-	ax_meta.annotate("Source name = " + obsinfo["Source_name"], 0.42, 0.88, {{"fontsize", fontsize}});
-	ax_meta.annotate("Date (MJD) = " + s_toa, 0.42, 0.74, {{"fontsize", fontsize}});
-	ax_meta.annotate("GL (deg) = " + obsinfo["GL"], 0.42, 0.60, {{"fontsize", fontsize}});
-	ax_meta.annotate("GB (deg) = " + obsinfo["GB"], 0.42, 0.46, {{"fontsize", fontsize}});
-	ax_meta.annotate("MaxDM YMW16  (pc/cc) = " + s_ymw16_maxdm, 0.42, 0.32, {{"fontsize", fontsize}});
-	ax_meta.annotate("Distance YMW16 (pc) = " + s_dist, 0.42, 0.18, {{"fontsize", fontsize}});
+	ax_meta.annotate("Beam = " + obsinfo["Beam"], 0.02, 0.82, {{"fontsize", fontsize}});
+	ax_meta.annotate("RA = " + obsinfo["RA"], 0.02, 0.76, {{"fontsize", fontsize}});
+	ax_meta.annotate("DEC = " + obsinfo["DEC"], 0.02, 0.7, {{"fontsize", fontsize}});
+	ax_meta.annotate("DM (pc/cc) = " + s_dm, 0.02, 0.64, {{"fontsize", fontsize}});
+	ax_meta.annotate("Width (ms) = " + s_width, 0.02, 0.58, {{"fontsize", fontsize}});
+	ax_meta.annotate("S/N = " + s_snr, 0.02, 0.52, {{"fontsize", fontsize}});
+	ax_meta.annotate("Source name = " + obsinfo["Source_name"], 0.02, 0.46, {{"fontsize", fontsize}});
+	ax_meta.annotate("Date (MJD) = " + s_toa, 0.02, 0.4, {{"fontsize", fontsize}});
+	ax_meta.annotate("GL (deg) = " + obsinfo["GL"], 0.02, 0.34, {{"fontsize", fontsize}});
+	ax_meta.annotate("GB (deg) = " + obsinfo["GB"], 0.02, 0.28, {{"fontsize", fontsize}});
+	ax_meta.annotate("MaxDM YMW16  (pc/cc) = " + s_ymw16_maxdm, 0.02, 0.22, {{"fontsize", fontsize}});
+	ax_meta.annotate("Distance YMW16 (pc) = " + s_dist, 0.02, 0.16, {{"fontsize", fontsize}});
+	ax_meta.annotate("Best RM (rad/m/m) = " + s_rm, 0.02, 0.1, {{"fontsize", fontsize}});
 	
 	ax_meta.annotate(rawdata, 0.985, 0.05, {{"xycoords","figure fraction"}, {"fontsize", "0.7"}, {"rotation", "270"}});
 	ax_meta.annotate("Generated by TransientX and PlotX", 0.01, 0.01, {{"xycoords","figure fraction"}, {"fontsize", "0.7"}, {"rotation", "0"}});
 	fig.push(ax_meta);
 
-	fig.save(figname+"/PNG");
+	//fig.save(figname+"/PNG");
+	fig.save(figname+"/CPS");
 
 	std::ofstream outfile;
 	outfile.open(rootname + "_replot.cands", ios_base::app); // append instead of overwrite
@@ -1514,6 +1601,7 @@ void Candidate::save2png(const std::string &rootname, float threS)
 	outfile<<setprecision(1)<<fixed<<snr<<"\t";
 	outfile<<setprecision(0)<<fixed<<fl<<"\t";
 	outfile<<setprecision(0)<<fixed<<fh<<"\t";
+	outfile<<setprecision(0)<<fixed<<bestRM<<"\t";
 	outfile<<figname<<"\t";
 	outfile<<s_id<<"\t";
 	outfile<<rawdata<<endl;
@@ -1536,10 +1624,9 @@ void Candidate::plot()
 	}
 
 	std::vector<float> mxft(nchan*nbin, 0.);
-	for (long int k=0; k<npol; k++)
+	int npol2sum = (npol==2 ? 2 : 1);
+	for (long int k=0; k<npol2sum; k++)
 	{
-		if (k<2)
-		{
 			for (long int j=0; j<nchan; j++)
 			{
 				for (long int i=0; i<nbin; i++)
@@ -1547,7 +1634,6 @@ void Candidate::plot()
 					mxft[j*nbin+i] += data[k*nchan*nbin+j*nbin+i];
 				}
 			}
-		}
 	}
 
 	std::ofstream outfile("tmp.dat", std::ios::binary);

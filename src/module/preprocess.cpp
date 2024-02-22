@@ -15,8 +15,9 @@ void Preprocess::prepare(DataBuffer<short> &databuffer)
 {
 	nsamples = databuffer.nsamples/td;
 	nchans = databuffer.nchans/fd;
-
-	resize(nsamples, nchans);
+	npol = databuffer.npol;
+	
+	resize(nsamples, nchans, npol);
 	tsamp = databuffer.tsamp*td;
 
 	fill(frequencies.begin(), frequencies.end(), 0.);

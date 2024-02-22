@@ -104,6 +104,9 @@ public:
 	/* plot */
 	void plot();
 
+        /* run Faraday Search */
+  void runFaraday(double rmlim, double rmstep);
+  
 public:
 	static double dmdelay(double dm, double fh, double fl)
 	{
@@ -150,6 +153,13 @@ public:
 	std::vector<float> dmtsnrmap;
 	std::vector<int> dmtwidmap;
 	std::vector<float> profile;
+public: // Faraday stuff
+  long unsigned int nRMs;
+  vector<complex<float>> L;
+  vector<float> Lavg;
+  vector<float> RM_trials;
+  vector<float> lambda2;
+  float bestRM;
 private:
 	bool isdedispersed;
 	bool isnormalized;

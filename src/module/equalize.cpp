@@ -35,8 +35,9 @@ void Equalize::prepare(DataBuffer<float> &databuffer)
 {
 	nsamples = databuffer.nsamples;
 	nchans = databuffer.nchans;
-
-	resize(nsamples, nchans);
+	npol = databuffer.npol;
+	
+	resize(nsamples, nchans, npol);
 
 	tsamp = databuffer.tsamp;
 	frequencies = databuffer.frequencies;

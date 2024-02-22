@@ -29,8 +29,9 @@ void Patch::prepare(DataBuffer<float> &databuffer)
 {
 	nsamples = databuffer.nsamples;
 	nchans = databuffer.nchans;
+	npol = databuffer.npol;
 
-	resize(nsamples, nchans);
+	resize(nsamples, nchans, npol);
 
 	tsamp = databuffer.tsamp;
 	frequencies = databuffer.frequencies;

@@ -49,7 +49,8 @@ void Downsample::prepare(DataBuffer<float> &databuffer)
 
 	nsamples = databuffer.nsamples/td;
 	nchans = databuffer.nchans/fd;
-	resize(nsamples, nchans);
+	npol = databuffer.npol;
+	resize(nsamples, nchans, npol);
 
 	tsamp = databuffer.tsamp*td;
 
